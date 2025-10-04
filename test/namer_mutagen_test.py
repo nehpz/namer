@@ -111,7 +111,7 @@ class UnitTestAsTheDefaultExecution(unittest.TestCase):
         """
         # when the id = <id>
         # Updated hash after FFMpeg implementation changes
-        expected_on_all_oses = '1772fcba7610818eaef63d3e268c5ea9134b4531680cdb66ae6e16a3a1c20acc'
+        expected_on_all_oses = '2246f5c92c3505a8001ba654e8376054ce79da957314f9a7b57fc6794d29e275'
 
         sha_1 = None
         sha_2 = None
