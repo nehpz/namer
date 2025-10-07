@@ -114,6 +114,8 @@ RUN set -eux; \
   mkdir -p namer/tools; \
   # Initialize and update git submodules
   git submodule update --init --recursive; \
+  # Verify submodule is present
+  test -d videohashes/cmd || { echo "videohashes submodule missing" >&2; exit 1; }; \
   # Determine architecture and set target file
   # Build videohashes for the current architecture
   ARCH=$(dpkg --print-architecture); \
@@ -133,12 +135,13 @@ RUN set -eux; \
       exit 1; \
       ;; \
   esac; \
-  # Build, copy, and validate videohashes binary
-  make -C ./videohashes "$MAKE_TARGET" && \
-  cp "./videohashes/dist/$TARGET_FILE" "./namer/tools/" && \
-  chmod +x "./namer/tools/$TARGET_FILE" && \
-  file "./namer/tools/$TARGET_FILE" | grep -E "$ELF_PATTERN" >/dev/null || \
-  { echo "videohashes build/copy/validation failed for $TARGET_FILE" >&2; exit 1; }; \
+  # Build videohashes
+  make -C ./videohashes "$MAKE_TARGET" || { echo "videohashes build failed" >&2; exit 1; }; \
+  # Copy and validate binary
+  cp "./videohashes/dist/$TARGET_FILE" "./namer/tools/" || { echo "Failed to copy $TARGET_FILE" >&2; exit 1; }; \
+  chmod +x "./namer/tools/$TARGET_FILE"; \
+  # Verify binary is correct ELF type
+  file "./namer/tools/$TARGET_FILE" | grep -E "$ELF_PATTERN" >/dev/null || { echo "Binary validation failed for $TARGET_FILE" >&2; exit 1; }; \
   ls -l namer/tools
 RUN bash -lc "( cd /work/ && poetry run poe build_namer )"
 FROM base
