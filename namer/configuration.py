@@ -602,8 +602,9 @@ class NamerConfig:
     if you are going to check an logs you share for your token.
     """
 
-    # Skip FFmpeg validation primarily via NAMER_SKIP_FFMPEG_VALIDATION env var,
-    # with conservative best-effort pytest CLI detection. Avoids brittle sys.modules checks.
+    # Skip FFmpeg validation in test environments to avoid requiring the ffmpeg binary during tests.
+    # Validation is skipped primarily via the NAMER_SKIP_FFMPEG_VALIDATION env var,
+    # or with conservative best-effort pytest CLI detection. This approach avoids brittle sys.modules checks.
     ffmpeg: FFMpeg = FFMpeg(skip_validation=_ffmpeg_should_skip_validation())
     vph: VideoPerceptualHash = StashVideoPerceptualHash()  # type: ignore
     vph_alt: VideoPerceptualHash = VideoPerceptualHash(ffmpeg)
