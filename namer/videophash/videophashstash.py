@@ -114,3 +114,13 @@ class StashVideoPerceptualHash:
             logger.error('videohash execution failed (%s): %s', completed.returncode, stderr)
 
         return output
+
+    def is_binary_available(self) -> bool:
+        binary_path = self.__phash_path / self.__phash_name
+        try:
+            if not binary_path.exists():
+                return False
+            return os.access(binary_path, os.X_OK)
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.error('Failed to verify videohashes binary %s: %s', binary_path, error)
+            return False
