@@ -112,6 +112,7 @@ RUN bash -lc "( Xvfb :99 & cd /work/ && poetry run poe build_deps_no_videohashes
 RUN set -eux; \
   cd /work; \
   mkdir -p namer/tools; \
+  if [ -d .git ]; then git submodule update --init --recursive; fi; \
   # Verify submodule is present
   test -d videohashes/cmd || { echo "videohashes submodule missing" >&2; exit 1; }; \
   # Determine architecture and set target file
