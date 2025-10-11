@@ -206,10 +206,14 @@ class StashDBProvider(BaseMetadataProvider):
                         id
                         title
                         date
-                        urls
+                        urls {
+                            url
+                        }
                         details
                         duration
-                        images
+                        images {
+                            url
+                        }
                         studio {
                             name
                             parent {
@@ -268,10 +272,14 @@ class StashDBProvider(BaseMetadataProvider):
                         id
                         title
                         date
-                        urls
+                        urls {
+                            url
+                        }
                         details
                         duration
-                        images
+                        images {
+                            url
+                        }
                         studio {
                             name
                             parent {
