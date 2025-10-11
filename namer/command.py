@@ -5,10 +5,11 @@ Tools for working with files and directories in namer.
 import argparse
 import gzip
 import json
-from dataclasses import dataclass
 import os
 import shutil
 import sys
+from dataclasses import dataclass
+from numbers import Number
 from pathlib import Path
 from platform import system
 from typing import Iterable, List, Optional, Sequence, Tuple
@@ -16,11 +17,11 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 import jsonpickle
 from loguru import logger
 
+from namer.comparison_results import ComparisonResults, LookedUpFileInfo, SceneType
 from namer.configuration import NamerConfig
 from namer.configuration_utils import default_config
 from namer.ffmpeg import FFProbeResults
-from namer.fileinfo import parse_file_name, FileInfo
-from namer.comparison_results import ComparisonResults, LookedUpFileInfo, SceneType
+from namer.fileinfo import FileInfo, parse_file_name
 
 
 # noinspection PyDataclass
@@ -116,6 +117,25 @@ def move_command_files(target: Optional[Command], new_target: Path, is_auto: boo
     return output
 
 
+@logger.catch
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, Number):
+        try:
+            as_float = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return value
+        if as_float.is_integer():
+            return int(as_float)
+        return as_float
+    return value
+
+
 def _build_summary(match_attempts: Optional[ComparisonResults]) -> dict:
     if not match_attempts:
         return {'results': [], 'fileinfo': None, 'ambiguous_reason': None, 'candidate_guids': []}
@@ -155,12 +175,14 @@ def _build_summary(match_attempts: Optional[ComparisonResults]) -> dict:
             'date': fileinfo.date,
         }
 
-    return {
-        'results': summary_results,
-        'fileinfo': fileinfo_summary,
-        'ambiguous_reason': match_attempts.ambiguous_reason,
-        'candidate_guids': match_attempts.candidate_guids,
-    }
+    return _json_safe(
+        {
+            'results': summary_results,
+            'fileinfo': fileinfo_summary,
+            'ambiguous_reason': match_attempts.ambiguous_reason,
+            'candidate_guids': match_attempts.candidate_guids,
+        }
+    )
 
 
 def _write_summary_file(movie_file: Path, summary: dict, namer_config: NamerConfig) -> Optional[Path]:
@@ -180,37 +202,39 @@ def write_log_file(movie_file: Optional[Path], match_attempts: Optional[Comparis
     """
     Writes scene results to a gzipped JSON log and a human-readable summary file.
     """
-    log_name = None
-    if movie_file:
-        log_name = movie_file.with_name(movie_file.stem + '_namer.json.gz')
-        logger.info('Writing log to {}', log_name)
-        summary = _build_summary(match_attempts)
-        _write_summary_file(movie_file, summary, namer_config)
-        with open(log_name, 'wb') as log_file:
-            if match_attempts:
-                redacted: List[Tuple[LookedUpFileInfo, Optional[str], Optional[str]]] = []
-                try:
-                    for result in match_attempts.results or []:
-                        looked_up = getattr(result, 'looked_up', None)
-                        if looked_up:
-                            redacted.append((looked_up, getattr(looked_up, 'original_query', None), getattr(looked_up, 'original_response', None)))
-                            looked_up.original_query = None
-                            looked_up.original_response = None
+    if not movie_file:
+        return None
 
-                    json_out = jsonpickle.encode(match_attempts, separators=(',', ':'))
-                finally:
-                    for looked_up, original_query, original_response in redacted:
-                        looked_up.original_query = original_query
-                        looked_up.original_response = original_response
+    log_name = movie_file.with_name(movie_file.stem + '_namer.json.gz')
+    logger.info('Writing log to {}', log_name)
+    summary = _build_summary(match_attempts)
+    _write_summary_file(movie_file, summary, namer_config)
+    with open(log_name, 'wb') as log_file:
+        if match_attempts:
+            redacted: List[Tuple[LookedUpFileInfo, Optional[str], Optional[str]]] = []
+            try:
+                for result in match_attempts.results or []:
+                    looked_up = getattr(result, 'looked_up', None)
+                    if looked_up:
+                        redacted.append((looked_up, getattr(looked_up, 'original_query', None), getattr(looked_up, 'original_response', None)))
+                        looked_up.original_query = None
+                        looked_up.original_response = None
 
-                if json_out:
-                    json_out = json_out.encode('UTF-8')
-                    json_out = gzip.compress(json_out)
-                    log_file.write(json_out)
+                json_out = jsonpickle.encode(match_attempts, separators=(',', ':'))
+            finally:
+                for looked_up, original_query, original_response in redacted:
+                    looked_up.original_query = original_query
+                    looked_up.original_response = original_response
 
-        set_permissions(log_name, namer_config)
+            if json_out:
+                json_out = json_out.encode('UTF-8')
+                json_out = gzip.compress(json_out)
+                log_file.write(json_out)
+
+    set_permissions(log_name, namer_config)
 
     return log_name
+
 
 def _set_perms(target: Path, config: NamerConfig):
     file_perm: Optional[int] = int(str(config.set_file_permissions), 8) if config.set_file_permissions else None

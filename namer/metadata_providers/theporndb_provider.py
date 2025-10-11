@@ -155,6 +155,30 @@ class ThePornDBProvider(BaseMetadataProvider):
 
         # Performers
         performers_data = scene_data.get('performers') or []
+
+        def _extract_gender(*sources: dict) -> Optional[str]:
+            def _from_dict(payload: dict) -> Optional[str]:
+                gender_value = payload.get('gender')
+                if gender_value:
+                    return gender_value
+                for key in ('extra', 'extras'):
+                    nested = payload.get(key)
+                    if isinstance(nested, dict):
+                        nested_gender = nested.get('gender')
+                        if nested_gender:
+                            return nested_gender
+                parent_payload = payload.get('parent')
+                if isinstance(parent_payload, dict):
+                    return _from_dict(parent_payload)
+                return None
+
+            for source in sources:
+                if isinstance(source, dict):
+                    gender_value = _from_dict(source)
+                    if gender_value:
+                        return gender_value
+            return None
+
         for appearance in performers_data:
             appearance_info = appearance if isinstance(appearance, dict) else {}
             performer_info = appearance_info.get('performer') if isinstance(appearance_info.get('performer'), dict) else None
@@ -168,6 +192,7 @@ class ThePornDBProvider(BaseMetadataProvider):
                 continue
 
             performer = Performer(performer_name)
+            performer.alias = performer_name
 
             aliases_source = None
             if performer_info and performer_info.get('aliases'):
@@ -177,15 +202,7 @@ class ThePornDBProvider(BaseMetadataProvider):
             if aliases_source:
                 performer.alias = ', '.join(aliases_source) if isinstance(aliases_source, list) else str(aliases_source)
 
-            gender = None
-            if performer_info:
-                gender = performer_info.get('gender')
-                extras = performer_info.get('extras') if isinstance(performer_info.get('extras'), dict) else None
-                if isinstance(extras, dict) and extras.get('gender'):
-                    gender = gender or extras.get('gender')
-            extras_fallback = appearance_info.get('extras') if isinstance(appearance_info.get('extras'), dict) else None
-            if isinstance(extras_fallback, dict) and extras_fallback.get('gender'):
-                gender = gender or extras_fallback.get('gender')
+            gender = _extract_gender(performer_info, appearance_info)
             if gender:
                 performer.role = gender
 
@@ -225,7 +242,12 @@ class ThePornDBProvider(BaseMetadataProvider):
                 except KeyError:
                     hash_type = HashType.PHASH
 
-            scene_hash = SceneHash(hash_entry.get('hash', ''), hash_type, hash_entry.get('duration'))
+            raw_hash = hash_entry.get('hash', '')
+            hash_value = raw_hash.strip() if isinstance(raw_hash, str) else str(raw_hash).strip()
+            if not hash_value:
+                continue
+
+            scene_hash = SceneHash(hash_value, hash_type, hash_entry.get('duration'))
             file_info.hashes.append(scene_hash)
 
         # Set original query/response for compatibility

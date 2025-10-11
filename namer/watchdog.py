@@ -112,9 +112,13 @@ def retry_failed(namer_config: NamerConfig):
 
     logger.info('Retry failed items:')
 
-    # remove all old namer log files
+    # remove all old namer log files and summaries
     for log_file in failed_dir.rglob('**/*_namer.json.gz'):
         log_file.unlink()
+    for summary_file in failed_dir.rglob('**/*_namer_summary.json'):
+        summary_file.unlink()
+    for note_file in failed_dir.rglob('**/*.ambiguous.json'):
+        note_file.unlink()
 
     # move all files back to watch dir.
     for file in gather_target_files_from_dir(failed_dir, namer_config):
@@ -191,6 +195,8 @@ class MovieEventHandler(PatternMatchingEventHandler):
         command = make_command_relative_to(input_dir=path, relative_to=self.__watch_dir, config=self.__namer_config)
         working_command = move_command_files(command, self.__work_dir)
         if working_command is not None:
+            if path.is_file():
+                working_command.config = self.__namer_config
             self.__enqueue_work_fn(working_command)
 
 
